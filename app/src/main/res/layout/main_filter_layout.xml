@@ -257,6 +257,7 @@
         android:layout_height="wrap_content"
         android:layout_margin="10dp"
         android:background="@drawable/primary_btn"
+        app:backgroundTint="@color/selector_color"
         android:text="Apply"
         android:textSize="17sp" />
 
