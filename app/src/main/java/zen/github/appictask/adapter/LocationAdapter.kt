@@ -58,7 +58,7 @@ class LocationAdapter(private val checkedList: MutableList<LocationName>) :
 
     override fun getItemCount(): Int = differ.currentList.size
 
-    fun setSelectedItems(selectedItems: MutableList<LocationName>) {
+    fun setSelectedItems(selectedItems: List<LocationName>) {
         checkedList.addAll(selectedItems)
         notifyItemRangeChanged(0, itemCount)
     }

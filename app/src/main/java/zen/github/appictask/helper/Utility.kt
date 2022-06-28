@@ -40,9 +40,9 @@ object Utility {
         return builder.toString()
     }
 
-    fun boldText(initial: String, boldText: String): String {
+    fun toBoldText(initial: String, boldText: String): SpannableStringBuilder {
         return SpannableStringBuilder()
             .append(initial)
-            .bold { append(boldText) }.toString()
+            .bold { append(boldText) }
     }
 }

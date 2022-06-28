@@ -1,11 +1,10 @@
 package zen.github.appictask.activities
 
-import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.widget.addTextChangedListener
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.gson.Gson
@@ -48,7 +47,7 @@ class MainActivity : AppCompatActivity() {
             filter.setOnClickListener {
                 dataModel?.let {
                     Log.d(TAG, dataModel.toString())
-                    showFilterDialog()
+                    showMainFilterDialog()
                 } ?: run {
                     Toast.makeText(this@MainActivity, "Error Loading Data", Toast.LENGTH_SHORT)
                         .show()
@@ -66,7 +65,7 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    private fun showFilterDialog() {
+    private fun showMainFilterDialog() {
         dialogBinding = MainFilterLayoutBinding.inflate(layoutInflater)
         val filterDialog = BottomSheetDialog(this, R.style.SheetDialog)
         dialogBinding.apply {
@@ -86,21 +85,22 @@ class MainActivity : AppCompatActivity() {
 
             val accounts =
                 if (selectedAccountNo.size == 0) "" else selectedAccountNo.size.toString()
-            val brands = if (selectedBrands.size == 0) "" else selectedBrands.size.toString()
+            val brands =
+                if (selectedAccountNo.size == 0) "" else if (selectedBrands.size == 0) "" else selectedBrands.size.toString()
             val locations =
-                if (selectedLocations.size == 0) "" else selectedLocations.size.toString()
+                if (selectedAccountNo.size == 0) "" else if (selectedLocations.size == 0) "" else selectedLocations.size.toString()
 
-            accountNo.text = Utility.boldText(
+            accountNo.text = Utility.toBoldText(
                 "Acc No. : ",
                 accounts
             )
 
-            brand.text = Utility.boldText(
+            brand.text = Utility.toBoldText(
                 "Brand : ",
                 brands
             )
 
-            location.text = Utility.boldText(
+            location.text = Utility.toBoldText(
                 "Location : ",
                 locations
             )
@@ -141,7 +141,7 @@ class MainActivity : AppCompatActivity() {
                 if (getFilteredLocations().isNotEmpty()) {
                     filterDialog.dismiss()
                     showFilters(
-                        BottomSheetDialog(this@MainActivity),
+                        BottomSheetDialog(this@MainActivity, R.style.SheetDialog),
                         SectionDialogLayoutBinding.inflate(layoutInflater),
                         FilterType.LOCATIONS
                     )
@@ -152,11 +152,11 @@ class MainActivity : AppCompatActivity() {
                 locationLayout.callOnClick()
             }
 
-           /* clear.setOnClickListener {
-                selectedAccountNo.clear()
-                selectedBrands.clear()
-                selectedLocations.clear()
-            }*/
+            /* clear.setOnClickListener {
+                 selectedAccountNo.clear()
+                 selectedBrands.clear()
+                 selectedLocations.clear()
+             }*/
 
             close.setOnClickListener {
                 if (filterDialog.isShowing)
@@ -172,59 +172,40 @@ class MainActivity : AppCompatActivity() {
 
     }
 
-    private fun getFilteredBrands(): MutableList<BrandName> {
-        val list: MutableList<BrandName> = ArrayList()
-        dataModel?.let {
-            for (child in it.filterData[0].hierarchy) {
-                if (selectedAccountNo.contains(child)) {
-                    list.addAll(child.brandNameList)
-                }
-            }
-        }
-        return list
-    }
-
-    private fun getFilteredLocations(): MutableList<LocationName> {
-        val list: MutableList<LocationName> = ArrayList()
-        dataModel?.let {
-            for (child in it.filterData[0].hierarchy) {
-                if (selectedAccountNo.contains(child)) {
-                    for (brand in child.brandNameList) {
-                        if (selectedBrands.contains(brand)) {
-                            list.addAll(brand.locationNameList)
-                        }
-                    }
-                }
-            }
-        }
-        return list
-    }
-
     private fun showFilters(
         bottomSheetDialog: BottomSheetDialog,
         binding: SectionDialogLayoutBinding,
         type: FilterType
     ) {
         binding.apply {
-            recyclerView.layoutManager = LinearLayoutManager(this@MainActivity)
 
             header.text = "Select ${Utility.toCamelCase(type.name)}"
 
-            close.setOnClickListener {
-                if (bottomSheetDialog.isShowing)
-                    bottomSheetDialog.dismiss()
-            }
-
-            clear.setOnClickListener {
-                selectAll.isChecked = false
-            }
-
             search.hint = "Search for ${Utility.toCamelCase(type.name)}"
+
+            recyclerView.layoutManager = LinearLayoutManager(this@MainActivity)
+
+            when (type) {
+                FilterType.ACCOUNT_NO -> {
+                    accountAdapter = AccountAdapter(selectedAccountNo)
+                    recyclerView.adapter = accountAdapter
+                    accountAdapter.differ.submitList(getAccountNos())
+                }
+                FilterType.BRANDS -> {
+                    brandAdapter = BrandAdapter(selectedBrands)
+                    recyclerView.adapter = brandAdapter
+                    brandAdapter.differ.submitList(getFilteredBrands())
+                }
+                FilterType.LOCATIONS -> {
+                    locationAdapter = LocationAdapter(selectedLocations)
+                    recyclerView.adapter = locationAdapter
+                    locationAdapter.differ.submitList(getFilteredLocations())
+                }
+            }
 
             selectAll.isChecked = when (type) {
                 FilterType.ACCOUNT_NO -> {
-                    val hierarchy = dataModel!!.filterData[0].hierarchy
-                    selectedAccountNo == hierarchy
+                    selectedAccountNo == getAccountNos()
                 }
                 FilterType.BRANDS -> {
                     selectedBrands == getFilteredBrands()
@@ -234,12 +215,47 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
+            search.addTextChangedListener {
+                it?.let {
+                    when (type) {
+                        FilterType.ACCOUNT_NO -> {
+                            val searchedList: MutableList<Hierarchy> = ArrayList()
+                            for (account in getAccountNos()) {
+                                if (account.accountNumber.contains(it.toString()))
+                                    searchedList.add(account)
+                            }
+                            accountAdapter.differ.submitList(searchedList)
+                        }
+                        FilterType.BRANDS -> {
+                            val searchedList: MutableList<BrandName> = ArrayList()
+                            for (account in getFilteredBrands()) {
+                                if (account.brandName.lowercase()
+                                        .contains(it.toString().lowercase())
+                                )
+                                    searchedList.add(account)
+                            }
+                            brandAdapter.differ.submitList(searchedList)
+                        }
+                        FilterType.LOCATIONS -> {
+                            val searchedList: MutableList<LocationName> = ArrayList()
+                            for (account in getFilteredLocations()) {
+                                if (account.locationName.lowercase()
+                                        .contains(it.toString().lowercase())
+                                )
+                                    searchedList.add(account)
+                            }
+                            locationAdapter.differ.submitList(searchedList)
+                        }
+                    }
+                }
+            }
+
             selectAll.setOnCheckedChangeListener { _, isChecked ->
                 if (isChecked) {
                     when (type) {
                         FilterType.ACCOUNT_NO -> {
                             selectedAccountNo.clear()
-                            accountAdapter.setSelectedItems(dataModel!!.filterData[0].hierarchy)
+                            accountAdapter.setSelectedItems(getAccountNos())
                         }
                         FilterType.BRANDS -> {
                             selectedBrands.clear()
@@ -268,38 +284,49 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            when (type) {
-                FilterType.ACCOUNT_NO -> {
-                    accountAdapter = AccountAdapter(selectedAccountNo)
-                    recyclerView.adapter = accountAdapter
-                    accountAdapter.differ.submitList(dataModel!!.filterData[0].hierarchy)
-
-                    add.setOnClickListener {
+            add.setOnClickListener {
+                when (type) {
+                    FilterType.ACCOUNT_NO -> {
                         bottomSheetDialog.dismiss()
                         Log.d(TAG, "Selected Accounts - ${selectedAccountNo.size}")
-                        showFilterDialog()
+                        showMainFilterDialog()
                     }
-                }
-                FilterType.BRANDS -> {
-                    brandAdapter = BrandAdapter(selectedBrands)
-                    recyclerView.adapter = brandAdapter
-                    brandAdapter.differ.submitList(getFilteredBrands())
-
-                    add.setOnClickListener {
+                    FilterType.BRANDS -> {
                         bottomSheetDialog.dismiss()
                         Log.d(TAG, "Selected Brands - ${selectedBrands.size}")
-                        showFilterDialog()
+                        showMainFilterDialog()
                     }
-                }
-                FilterType.LOCATIONS -> {
-                    locationAdapter = LocationAdapter(selectedLocations)
-                    recyclerView.adapter = locationAdapter
-                    locationAdapter.differ.submitList(getFilteredLocations())
-
-                    add.setOnClickListener {
+                    FilterType.LOCATIONS -> {
                         bottomSheetDialog.dismiss()
                         Log.d(TAG, "Selected Locations - ${selectedLocations.size}")
-                        showFilterDialog()
+                        showMainFilterDialog()
+                    }
+                }
+            }
+
+            close.setOnClickListener {
+                if (bottomSheetDialog.isShowing) {
+                    bottomSheetDialog.dismiss()
+                    showMainFilterDialog()
+                }
+            }
+
+            clear.setOnClickListener {
+                if (selectAll.isChecked) selectAll.isChecked = false
+                else {
+                    when (type) {
+                        FilterType.ACCOUNT_NO -> {
+                            selectedAccountNo.clear()
+                            accountAdapter.setSelectedItems(selectedAccountNo)
+                        }
+                        FilterType.BRANDS -> {
+                            selectedBrands.clear()
+                            brandAdapter.setSelectedItems(selectedBrands)
+                        }
+                        FilterType.LOCATIONS -> {
+                            selectedLocations.clear()
+                            locationAdapter.setSelectedItems(selectedLocations)
+                        }
                     }
                 }
             }
@@ -307,9 +334,36 @@ class MainActivity : AppCompatActivity() {
 
         bottomSheetDialog.apply {
             setContentView(binding.root)
-            window!!.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
             setCanceledOnTouchOutside(true)
             show()
         }
+    }
+
+    private fun getAccountNos(): List<Hierarchy> {
+        return dataModel!!.filterData[0].hierarchy
+    }
+
+    private fun getFilteredBrands(): List<BrandName> {
+        val list: MutableList<BrandName> = ArrayList()
+        for (child in getAccountNos()) {
+            if (selectedAccountNo.contains(child)) {
+                list.addAll(child.brandNameList)
+            }
+        }
+        return list
+    }
+
+    private fun getFilteredLocations(): List<LocationName> {
+        val list: MutableList<LocationName> = ArrayList()
+        for (child in getAccountNos()) {
+            if (selectedAccountNo.contains(child)) {
+                for (brand in child.brandNameList) {
+                    if (selectedBrands.contains(brand)) {
+                        list.addAll(brand.locationNameList)
+                    }
+                }
+            }
+        }
+        return list
     }
 }

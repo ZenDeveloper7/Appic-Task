@@ -58,7 +58,7 @@ class BrandAdapter(private val checkedList: MutableList<BrandName>) :
 
     override fun getItemCount(): Int = differ.currentList.size
 
-    fun setSelectedItems(selectedItems: MutableList<BrandName>) {
+    fun setSelectedItems(selectedItems: List<BrandName>) {
         checkedList.addAll(selectedItems)
         notifyItemRangeChanged(0, itemCount)
     }
